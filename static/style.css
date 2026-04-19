@@ -1,0 +1,24 @@
+body {
+    background-color: #eef2f7;
+}
+.card {
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+#sample-box {
+    font-size: 0.85rem;
+}
+#log-panel::-webkit-scrollbar {
+    width: 6px;
+}
+#log-panel::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+#chat-history::-webkit-scrollbar {
+    width: 6px;
+}
+#chat-history::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 3px;
+}

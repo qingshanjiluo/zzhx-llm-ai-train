@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>最中幻想LLM训练场</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container-fluid mt-3">
+    <h1 class="text-center">🤖 最中幻想LLM训练场</h1>
+    <div class="row">
+        <!-- 左侧：数据集 + 训练配置 -->
+        <div class="col-md-3">
+            <div class="card mb-3">
+                <div class="card-header">📁 数据集</div>
+                <div class="card-body" id="dataset-info">加载中...</div>
+                <form id="upload-form" enctype="multipart/form-data" class="p-2">
+                    <input type="file" id="dataset-file" accept=".txt" class="form-control mb-2">
+                    <button type="submit" class="btn btn-primary w-100">上传数据集</button>
+                </form>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">🤖 DeepSeek 数据集生成</div>
+                <div class="card-body">
+                    <form id="generate-form">
+                        <label>DeepSeek API Key</label>
+                        <input type="password" id="ds-api-key" class="form-control mb-2" placeholder="sk-...">
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="ds-use-ref">
+                            <label class="form-check-label" for="ds-use-ref" title="勾选后，DeepSeek 会学习当前已上传数据集的文风、用词和格式来生成新内容">
+                                基于当前数据集风格生成
+                            </label>
+                        </div>
+                        <label>生成主题 / 领域</label>
+                        <input type="text" id="ds-topic" class="form-control mb-2" placeholder="例如：莎士比亚风格戏剧对话">
+                        <label>风格 / 额外要求</label>
+                        <input type="text" id="ds-style" class="form-control mb-2" placeholder="例如：古英语、戏剧化、对白形式">
+                        <label>目标字符数</label>
+                        <input type="number" id="ds-chars" class="form-control mb-2" value="5000" min="500" max="50000">
+                        <label>温度 ( creativity )</label>
+                        <input type="number" step="0.1" id="ds-temp" class="form-control mb-2" value="0.8" min="0" max="2">
+                        <button type="submit" class="btn btn-warning w-100">✨ 生成数据集</button>
+                    </form>
+                    <div id="generate-status" class="mt-2 text-muted" style="font-size:0.85rem"></div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">⚙️ 训练超参数</div>
+                <div class="card-body">
+                    <form id="train-form">
+                        <label>模型维度 n_embd</label><input type="number" name="n_embd" class="form-control mb-2" value="512">
+                        <label>注意力头数 n_head</label><input type="number" name="n_head" class="form-control mb-2" value="8">
+                        <label>层数 n_layer</label><input type="number" name="n_layer" class="form-control mb-2" value="8">
+                        <label>上下文长度 block_size</label><input type="number" name="block_size" class="form-control mb-2" value="256">
+                        <label>Dropout</label><input type="number" step="0.05" name="dropout" class="form-control mb-2" value="0.1">
+                        <label>批次大小 batch_size</label><input type="number" name="batch_size" class="form-control mb-2" value="32">
+                        <label>梯度累积步数</label><input type="number" name="gradient_accumulation_steps" class="form-control mb-2" value="2">
+                        <label>学习率</label><input type="number" step="1e-5" name="learning_rate" class="form-control mb-2" value="0.0003">
+                        <label>最大迭代次数</label><input type="number" name="max_iters" class="form-control mb-2" value="5000">
+                        <label>预热步数 warmup_iters</label><input type="number" name="warmup_iters" class="form-control mb-2" value="500">
+                        <label>权重衰减</label><input type="number" step="0.001" name="weight_decay" class="form-control mb-2" value="0.01">
+                        <label>梯度裁剪范数</label><input type="number" step="0.5" name="grad_norm_clip" class="form-control mb-2" value="1.0">
+                        <label>学习率调度 (cosine/none)</label>
+                        <select name="scheduler" class="form-control mb-2">
+                            <option value="cosine">余弦退火 + 预热</option>
+                            <option value="none">固定</option>
+                        </select>
+                        <label>CPU 线程限制 (0=不限)</label>
+                        <input type="number" name="cpu_threads" class="form-control mb-2" value="0" title="限制 PyTorch 使用的 CPU 线程数，0 表示使用全部核心">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">🚀 开始训练</button>
+                            <button type="button" id="stop-train" class="btn btn-danger">⏹️ 停止训练</button>
+                            <button type="button" id="save-model" class="btn btn-info">💾 保存当前模型</button>
+                            <button type="button" id="load-model" class="btn btn-secondary">📂 加载最佳模型</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">📂 模型管理</div>
+                <div class="card-body">
+                    <div id="model-list" class="mb-2" style="max-height: 200px; overflow-y: auto;">
+                        <div class="text-muted">加载中...</div>
+                    </div>
+                    <button type="button" id="refresh-models" class="btn btn-outline-primary btn-sm w-100">刷新列表</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中间：训练可视化 -->
+        <div class="col-md-5">
+            <div class="card mb-3">
+                <div class="card-header">📈 训练曲线</div>
+                <div class="card-body">
+                    <canvas id="lossChart" width="400" height="200"></canvas>
+                </div>
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header">📉 学习率</div>
+                        <div class="card-body"><canvas id="lrChart" width="200" height="150"></canvas></div>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="card">
+                        <div class="card-header">🧮 困惑度 PPL</div>
+                        <div class="card-body"><canvas id="pplChart" width="200" height="150"></canvas></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-header">⚡ 训练速度 (tokens/s)</div>
+                <div class="card-body"><canvas id="speedChart" width="400" height="150"></canvas></div>
+            </div>
+            <div class="card">
+                <div class="card-header">✍️ 实时生成样例</div>
+                <div class="card-body" id="sample-box" style="height: 280px; overflow-y: auto; background: #f8f9fa; font-family: monospace; white-space: pre-wrap;">
+                    等待训练开始...
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧：实战测试场 + 日志 -->
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header">🎯 实战测试场（长对话）</div>
+                <div class="card-body">
+                    <div id="chat-history" style="height: 300px; overflow-y: auto; background: #f1f1f1; padding: 10px; margin-bottom: 10px; font-size: 0.9rem;">
+                        <div class="text-muted">模型加载后即可开始对话。</div>
+                    </div>
+                    <div class="input-group mb-2">
+                        <input type="text" id="chat-input" class="form-control" placeholder="输入你的消息...">
+                        <button id="send-btn" class="btn btn-primary">发送</button>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col"><label>温度</label><input type="number" step="0.1" id="chat-temp" class="form-control" value="0.8"></div>
+                        <div class="col"><label>Top-K</label><input type="number" id="chat-topk" class="form-control" value="40"></div>
+                        <div class="col"><label>Top-P</label><input type="number" step="0.05" id="chat-topp" class="form-control" value="0.9"></div>
+                        <div class="col"><label>最大长度</label><input type="number" id="chat-maxlen" class="form-control" value="150"></div>
+                    </div>
+                    <button id="clear-chat" class="btn btn-outline-secondary mt-2 w-100">清空对话</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">📋 运行日志（训练 + 推理）</div>
+                <div class="card-body p-0">
+                    <div id="log-panel" style="height: 300px; overflow-y: auto; background: #1e1e1e; color: #d4d4d4; font-family: 'Courier New', monospace; font-size: 0.8rem; padding: 10px;">
+                        <div class="text-muted">等待日志...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
